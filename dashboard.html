@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TPI Datos II — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:        #0b0e14;
+    --surface:   #12161f;
+    --card:      #181d29;
+    --border:    #252b3b;
+    --accent1:   #00e5c3;   /* teal */
+    --accent2:   #ff5f57;   /* coral */
+    --accent3:   #ffc857;   /* gold */
+    --accent4:   #7b61ff;   /* violet */
+    --accent5:   #3de68d;   /* green */
+    --text:      #e8ecf4;
+    --muted:     #6b7592;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 180px;
+    opacity: .45;
+  }
+
+  /* ── Top bar ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(11,14,20,.88);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    font-family: var(--font-head);
+    font-size: 1.15rem; font-weight: 800; letter-spacing: .04em;
+    display: flex; align-items: center; gap: .6rem;
+  }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent1); box-shadow: 0 0 10px var(--accent1); }
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+
+  #api-url-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    padding: .4rem .75rem;
+    border-radius: 6px;
+    width: 240px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  #api-url-input:focus { border-color: var(--accent1); }
+
+  .btn-reload-all {
+    background: var(--accent1);
+    color: #000;
+    border: none;
+    font-family: var(--font-head);
+    font-weight: 700; font-size: .8rem;
+    padding: .45rem 1.2rem;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: .05em;
+    transition: opacity .2s, transform .1s;
+  }
+  .btn-reload-all:hover { opacity: .85; }
+  .btn-reload-all:active { transform: scale(.97); }
+
+  /* ── Status bar ── */
+  #status-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: .55rem 2rem;
+    display: flex; align-items: center; gap: .75rem;
+    font-size: .7rem; color: var(--muted);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background .3s; }
+  .status-dot.ok  { background: var(--accent5); box-shadow: 0 0 8px var(--accent5); }
+  .status-dot.err { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+
+  /* ── Grid ── */
+  main {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1.25rem;
+    padding: 1.75rem 2rem 3rem;
+    max-width: 1600px; margin: 0 auto;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.4rem 1.6rem 1.5rem;
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: border-color .25s;
+  }
+  .card:hover { border-color: #353d54; }
+  .card::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* accent stripe per card */
+  .card.c1::after { background: var(--accent1); }
+  .card.c2::after { background: var(--accent3); }
+  .card.c3::after { background: var(--accent2); }
+  .card.c4::after { background: var(--accent4); }
+  .card.c5::after { background: var(--accent5); }
+  .card.c6::after { background: var(--accent3); }
+
+  /* Grid placements */
+  .card.full  { grid-column: span 12; }
+  .card.half  { grid-column: span 6;  }
+  .card.third { grid-column: span 4;  }
+  .card.two-thirds { grid-column: span 8; }
+
+  @media (max-width: 1100px) {
+    .card.half, .card.two-thirds, .card.third { grid-column: span 12; }
+  }
+  @media (max-width: 640px) {
+    main { padding: 1rem; gap: 1rem; }
+    header { padding: 0 1rem; }
+    #api-url-input { width: 160px; }
+  }
+
+  /* ── Card header ── */
+  .card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.2rem;
+  }
+  .card-title {
+    font-family: var(--font-head);
+    font-size: 1rem; font-weight: 700;
+    letter-spacing: .02em;
+    line-height: 1.2;
+  }
+  .card-tag {
+    font-size: .62rem; font-weight: 500; letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted); margin-top: .3rem;
+  }
+  .btn-refresh {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .68rem; font-family: var(--font-mono);
+    padding: .3rem .65rem; border-radius: 5px;
+    cursor: pointer; flex-shrink: 0;
+    transition: color .2s, border-color .2s;
+  }
+  .btn-refresh:hover { color: var(--text); border-color: #3a4259; }
+
+  /* ── Chart wrapper ── */
+  .chart-wrap { position: relative; flex: 1; min-height: 0; }
+  .chart-wrap canvas { display: block; }
+
+  /* ── Loader ── */
+  .loader {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card);
+    border-radius: 8px; z-index: 5;
+    font-size: .72rem; color: var(--muted); letter-spacing: .1em;
+  }
+  .loader span { animation: blink 1.1s infinite; }
+  @keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  .error-msg {
+    font-size: .72rem; color: var(--accent2);
+    padding: .5rem .2rem;
+    letter-spacing: .03em;
+  }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; flex: 1; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: .78rem;
+  }
+  thead th {
+    text-align: left; padding: .55rem .75rem;
+    font-size: .6rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { transition: background .15s; }
+  tbody tr:hover { background: rgba(255,255,255,.03); }
+  tbody td {
+    padding: .6rem .75rem;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    font-weight: 300;
+  }
+  .rank { color: var(--muted); font-size: .68rem; }
+  .money { color: var(--accent3); font-weight: 500; }
+  .badge {
+    display: inline-block; padding: .15rem .5rem;
+    border-radius: 4px; font-size: .65rem; font-weight: 500;
+    letter-spacing: .06em;
+  }
+  .badge-pendiente  { background: rgba(255,200,87,.12); color: var(--accent3); }
+  .badge-entregado  { background: rgba(61,230,141,.12); color: var(--accent5); }
+  .badge-cancelado  { background: rgba(255,95,87,.12);  color: var(--accent2); }
+  .badge-procesando { background: rgba(123,97,255,.12); color: var(--accent4); }
+  .badge-enviado    { background: rgba(0,229,195,.12);  color: var(--accent1); }
+
+  /* ── KPI pills (top row) ── */
+  .kpi-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .kpi {
+    flex: 1; min-width: 110px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: .9rem 1.1rem;
+  }
+  .kpi-label { font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .kpi-value { font-family: var(--font-head); font-size: 1.5rem; font-weight: 800; margin-top: .25rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    TPI · DATOS II
+  </div>
+  <div class="header-right">
+    <input id="api-url-input" type="text" value="http://localhost:5071" placeholder="http://localhost:5071" />
+    <button class="btn-reload-all" onclick="loadAll()">↺ Actualizar todo</button>
+  </div>
+</header>
+
+<div id="status-bar">
+  <div class="status-dot" id="conn-dot"></div>
+  <span id="conn-label">Verificando conexión…</span>
+</div>
+
+<main>
+  <!-- ── Row 1: KPI strip ── -->
+  <div class="card full c1" id="card-kpi">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Resumen General</div>
+        <div class="card-tag">GET /api/report/test-connection</div>
+      </div>
+    </div>
+    <div class="kpi-grid" id="kpi-values">
+      <div class="kpi"><div class="kpi-label">Total Pedidos</div><div class="kpi-value" id="kpi-total" style="color:var(--accent1)">—</div></div>
+    </div>
+  </div>
+
+  <!-- ── Row 2: productos + ventas por día semana ── -->
+  <div class="card half c2" id="card-productos">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Productos Más Vendidos</div>
+        <div class="card-tag">GET /api/report/productos-mas-vendidos</div>
+      </div>
+      <button class="btn-refresh" onclick="loadProductos()">↺</button>
+    </div>
+    <div class="chart-wrap" style="height:300px;">
+      <div class="loader" id="loader-productos"><span>cargando…</span></div>
+      <canvas id="chart-productos"></canvas>
+    </div>
+  </div>
+
+  <div class="card half c3" id="card-semana">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Ventas por Día de Semana</div>
+        <div class="card-tag">GET /api/report/ventas-por-dia-semana</div>
+      </div>
+      <button class="btn-refresh" onclick="loadSemana()">↺</button>
+    </div>
+    <div class="chart-wrap" style="height:300px;">
+      <div class="loader" id="loader-semana"><span>cargando…</span></div>
+      <canvas id="chart-semana"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Row 3: ventas por día (full width line chart) ── -->
+  <div class="card full c4" id="card-dia">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Ventas por Día</div>
+        <div class="card-tag">GET /api/report/ventas-por-dia</div>
+      </div>
+      <button class="btn-refresh" onclick="loadDia()">↺</button>
+    </div>
+    <div class="chart-wrap" style="height:260px;">
+      <div class="loader" id="loader-dia"><span>cargando…</span></div>
+      <canvas id="chart-dia"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Row 4: estado (donut) + top clientes ── -->
+  <div class="card third c5" id="card-estado">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Pedidos por Estado</div>
+        <div class="card-tag">GET /api/report/pedidos-por-estado</div>
+      </div>
+      <button class="btn-refresh" onclick="loadEstado()">↺</button>
+    </div>
+    <div class="chart-wrap" style="height:280px;">
+      <div class="loader" id="loader-estado"><span>cargando…</span></div>
+      <canvas id="chart-estado"></canvas>
+    </div>
+  </div>
+
+  <div class="card two-thirds c6" id="card-top">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Top 5 Clientes</div>
+        <div class="card-tag">GET /api/report/top-clientes</div>
+      </div>
+      <button class="btn-refresh" onclick="loadTop()">↺</button>
+    </div>
+    <div class="loader" id="loader-top"><span>cargando…</span></div>
+    <div class="tbl-wrap" id="tbl-top-wrap" style="display:none;">
+      <table id="tbl-top">
+        <thead><tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Total Gastado</th></tr></thead>
+        <tbody id="tbl-top-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Row 5: pedidos por cliente (full table) ── -->
+  <div class="card full c1" id="card-clientes">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Pedidos por Cliente</div>
+        <div class="card-tag">GET /api/report/pedidos-por-cliente</div>
+      </div>
+      <button class="btn-refresh" onclick="loadClientes()">↺</button>
+    </div>
+    <div class="loader" id="loader-clientes"><span>cargando…</span></div>
+    <div class="tbl-wrap" id="tbl-clientes-wrap" style="display:none;">
+      <table id="tbl-clientes">
+        <thead><tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Total Gastado</th></tr></thead>
+        <tbody id="tbl-clientes-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── Utilities ─────────────────────────────────────────────────────────────
+const BASE = () => (document.getElementById('api-url-input').value || 'http://localhost:5071').replace(/\/$/, '');
+
+const DIAS = ['', 'Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+const PALETTE = [
+  'rgba(0,229,195,.85)',
+  'rgba(255,200,87,.85)',
+  'rgba(255,95,87,.85)',
+  'rgba(123,97,255,.85)',
+  'rgba(61,230,141,.85)',
+  'rgba(0,162,255,.85)',
+  'rgba(255,138,0,.85)',
+  'rgba(220,90,255,.85)',
+];
+
+const fmt = (n) => new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 }).format(n);
+
+let charts = {};
+
+function showLoader(id) {
+  const l = document.getElementById('loader-' + id);
+  if (l) { l.style.display = 'flex'; }
+}
+function hideLoader(id) {
+  const l = document.getElementById('loader-' + id);
+  if (l) l.style.display = 'none';
+}
+function showErr(parentId, msg) {
+  const card = document.getElementById('card-' + parentId);
+  let e = card.querySelector('.error-msg');
+  if (!e) { e = document.createElement('div'); e.className = 'error-msg'; card.appendChild(e); }
+  e.textContent = '⚠ ' + msg;
+}
+function clearErr(parentId) {
+  const card = document.getElementById('card-' + parentId);
+  const e = card && card.querySelector('.error-msg');
+  if (e) e.remove();
+}
+
+async function apiFetch(path) {
+  const r = await fetch(BASE() + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+// ─── Chart defaults ─────────────────────────────────────────────────────────
+Chart.defaults.color = '#6b7592';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 11;
+
+// ─── 1. Test connection ──────────────────────────────────────────────────────
+async function loadConnection() {
+  const dot   = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  try {
+    const data = await apiFetch('/api/report/test-connection');
+    // response is a plain string like "Pedidos en la BD: 42"
+    const match = String(data).match(/\d+/);
+    const total = match ? parseInt(match[0]) : '?';
+    document.getElementById('kpi-total').textContent = total;
+    dot.className = 'status-dot ok';
+    label.textContent = `Conectado — ${data}`;
+  } catch(e) {
+    dot.className = 'status-dot err';
+    label.textContent = `Sin conexión: ${e.message}`;
+  }
+}
+
+// ─── 2. Productos más vendidos (horizontal bar) ───────────────────────────
+async function loadProductos() {
+  clearErr('productos');
+  showLoader('productos');
+  try {
+    const data = await apiFetch('/api/report/productos-mas-vendidos');
+    hideLoader('productos');
+    destroyChart('productos');
+    const ctx = document.getElementById('chart-productos').getContext('2d');
+    charts.productos = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d.producto),
+        datasets: [{
+          label: 'Unidades vendidas',
+          data: data.map(d => d.cantidadVendida),
+          backgroundColor: PALETTE,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#6b7592' } },
+          y: { grid: { display: false }, ticks: { color: '#e8ecf4', font:{ size:11 } } }
+        }
+      }
+    });
+  } catch(e) {
+    hideLoader('productos');
+    showErr('productos', e.message);
+  }
+}
+
+// ─── 3. Ventas por día semana (grouped bar) ──────────────────────────────
+async function loadSemana() {
+  clearErr('semana');
+  showLoader('semana');
+  try {
+    const data = await apiFetch('/api/report/ventas-por-dia-semana');
+    hideLoader('semana');
+    destroyChart('semana');
+    const ctx = document.getElementById('chart-semana').getContext('2d');
+    charts.semana = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => DIAS[d.diaNumero] || `Día ${d.diaNumero}`),
+        datasets: [
+          {
+            label: 'Pedidos',
+            data: data.map(d => d.cantidadPedidos),
+            backgroundColor: 'rgba(255,95,87,.8)',
+            borderRadius: 5,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Total ($)',
+            data: data.map(d => d.totalVentas),
+            backgroundColor: 'rgba(255,200,87,.8)',
+            borderRadius: 5,
+            yAxisID: 'y1',
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#6b7592', boxWidth:10, font:{size:10} } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#e8ecf4' } },
+          y: { position: 'left',  grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#6b7592' } },
+          y1: { position: 'right', grid: { display: false }, ticks: { color: '#6b7592' } }
+        }
+      }
+    });
+  } catch(e) {
+    hideLoader('semana');
+    showErr('semana', e.message);
+  }
+}
+
+// ─── 4. Ventas por día (line chart) ─────────────────────────────────────
+async function loadDia() {
+  clearErr('dia');
+  showLoader('dia');
+  try {
+    const data = await apiFetch('/api/report/ventas-por-dia');
+    hideLoader('dia');
+    destroyChart('dia');
+    const ctx = document.getElementById('chart-dia').getContext('2d');
+
+    // Gradient fill
+    const gradient = ctx.createLinearGradient(0, 0, 0, 230);
+    gradient.addColorStop(0,   'rgba(123,97,255,.35)');
+    gradient.addColorStop(1,   'rgba(123,97,255,.0)');
+
+    charts.dia = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.fecha),
+        datasets: [{
+          label: 'Total ventas',
+          data: data.map(d => d.totalVentas),
+          borderColor: 'rgba(123,97,255,1)',
+          backgroundColor: gradient,
+          borderWidth: 2,
+          pointBackgroundColor: 'rgba(123,97,255,1)',
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: ctx => fmt(ctx.raw) }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#6b7592', maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,.04)' },
+            ticks: {
+              color: '#6b7592',
+              callback: v => '$' + (v/1000).toFixed(1) + 'k'
+            }
+          }
+        }
+      }
+    });
+  } catch(e) {
+    hideLoader('dia');
+    showErr('dia', e.message);
+  }
+}
+
+// ─── 5. Pedidos por estado (doughnut) ────────────────────────────────────
+const estadoClass = e => {
+  const m = { pendiente:'badge-pendiente', entregado:'badge-entregado', cancelado:'badge-cancelado', procesando:'badge-procesando', enviado:'badge-enviado' };
+  return m[e.toLowerCase()] || '';
+};
+
+async function loadEstado() {
+  clearErr('estado');
+  showLoader('estado');
+  try {
+    const data = await apiFetch('/api/report/pedidos-por-estado');
+    hideLoader('estado');
+    destroyChart('estado');
+    const ctx = document.getElementById('chart-estado').getContext('2d');
+    charts.estado = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(d => d.estado),
+        datasets: [{
+          data: data.map(d => d.cantidad),
+          backgroundColor: PALETTE,
+          borderWidth: 0,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '68%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#6b7592', boxWidth: 10, padding: 12, font:{size:10} }
+          }
+        }
+      }
+    });
+  } catch(e) {
+    hideLoader('estado');
+    showErr('estado', e.message);
+  }
+}
+
+// ─── 6. Top 5 clientes (table) ────────────────────────────────────────────
+async function loadTop() {
+  clearErr('top');
+  showLoader('top');
+  document.getElementById('tbl-top-wrap').style.display = 'none';
+  try {
+    const data = await apiFetch('/api/report/top-clientes');
+    hideLoader('top');
+    const body = document.getElementById('tbl-top-body');
+    body.innerHTML = '';
+    const medals = ['🥇','🥈','🥉','',''];
+    data.forEach((d, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank">${medals[i] || i+1}</td>
+        <td>${d.cliente}</td>
+        <td>${d.cantidadPedidos}</td>
+        <td class="money">${fmt(d.totalGastado)}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('tbl-top-wrap').style.display = 'block';
+  } catch(e) {
+    hideLoader('top');
+    showErr('top', e.message);
+  }
+}
+
+// ─── 7. Pedidos por cliente (table) ──────────────────────────────────────
+async function loadClientes() {
+  clearErr('clientes');
+  showLoader('clientes');
+  document.getElementById('tbl-clientes-wrap').style.display = 'none';
+  try {
+    const data = await apiFetch('/api/report/pedidos-por-cliente');
+    hideLoader('clientes');
+    const body = document.getElementById('tbl-clientes-body');
+    body.innerHTML = '';
+    data.forEach((d, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank">${i+1}</td>
+        <td>${d.cliente}</td>
+        <td>${d.cantidadPedidos}</td>
+        <td class="money">${fmt(d.totalGastado)}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('tbl-clientes-wrap').style.display = 'block';
+  } catch(e) {
+    hideLoader('clientes');
+    showErr('clientes', e.message);
+  }
+}
+
+// ─── Load all ────────────────────────────────────────────────────────────
+function loadAll() {
+  loadConnection();
+  loadProductos();
+  loadSemana();
+  loadDia();
+  loadEstado();
+  loadTop();
+  loadClientes();
+}
+
+// ─── CORS notice ─────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  console.info('%c[TPI-DATOS-II Dashboard]', 'color:#00e5c3;font-weight:bold',
+    '\nSi ves errores CORS, agregar en Program.cs:\n',
+    'builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));\n',
+    'app.UseCors();');
+  loadAll();
+});
+</script>
+</body>
+</html>
