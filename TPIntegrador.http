@@ -1,0 +1,6 @@
+@TPIntegrador_HostAddress = http://localhost:5273
+
+GET {{TPIntegrador_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
