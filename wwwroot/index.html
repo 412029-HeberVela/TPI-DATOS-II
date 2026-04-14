@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TP MongoDB - Delivery</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="relative text-slate-800">
+
+    <!-- Fondo -->
+    <div class="fixed inset-0 -z-10 bg-cover bg-center"
+         style="background-image: url('/img/foodBG.jpg');">
+    </div>
+
+    <!-- Overlay -->
+    <div class="fixed inset-0 -z-10 bg-black/40"></div>
+
+    <div class="max-w-6xl mx-auto p-6">
+
+        <h1 class="text-white text-4xl font-bold mb-6 text-center">🍔 Dashboard Delivery - MongoDB</h1>
+        <hr class="border-white/20 my-10">
+        <!-- Problema -->
+        <section class="mb-10">
+            <h2 class="text-white text-2xl font-semibold mb-4">Problema y Justificación</h2>
+
+            <div class="grid md:grid-cols-2 gap-4">
+
+                <div class="bg-white/80 backdrop-blur p-5 rounded-2xl shadow">
+                    <h3 class="font-bold text-lg mb-2">🚀 Lanzamiento urgente</h3>
+                    <p class="text-sm">Necesidad de registrar pedidos inmediatamente.</p>
+                    <p class="text-sm mt-2 text-gray-500">MongoDB permite un MVP sin diseño complejo.</p>
+                </div>
+
+                <div class="bg-white/80 backdrop-blur p-5 rounded-2xl shadow">
+                    <h3 class="font-bold text-lg mb-2">📊 Monitoreo del negocio</h3>
+                    <p class="text-sm">Se necesitan reportes desde el inicio.</p>
+                    <p class="text-sm mt-2 text-gray-500">Reportes útiles sin JOINs (Aggregation).</p>
+                </div>
+
+                <div class="bg-white/80 backdrop-blur p-5 rounded-2xl shadow">
+                    <h3 class="font-bold text-lg mb-2">🔄 Cambios de menú constantes</h3>
+                    <p class="text-sm">Datos cambiantes.</p>
+                    <p class="text-sm mt-2 text-gray-500">Flexibilidad gracias a no tener esquema fijo.</p>
+                </div>
+
+                <div class="bg-white/80 backdrop-blur p-5 rounded-2xl shadow">
+                    <h3 class="font-bold text-lg mb-2">❓ Incertidumbre de proyección</h3>
+                    <p class="text-sm">Crecimiento incierto del negocio.</p>
+                    <p class="text-sm mt-2 text-gray-500">Escalabilidad horizontal sin fricción.</p>
+                </div>
+
+            </div>
+        </section>
+        <hr class="border-white/20 my-10">
+
+        <!-- Justificación -->
+        <section class="mb-10">
+            <h2 class="text-white text-2xl font-semibold mb-4">¿Por qué base documental?</h2>
+            <div class="bg-white/80 backdrop-blur p-5 rounded-2xl shadow">
+                <p class="text-sm leading-relaxed">
+                    MongoDB ofrece un equilibrio entre estructura y capacidad de consulta. A diferencia de modelos
+                    como clave-valor, grafos o columnares que están super especializados en algo particular, las
+                    bases de datos documentales permiten flexibilidad tanto en la inserción como en la consulta de
+                    los datos sin sacrificar lo estructural del sistema.
+                </p>
+            </div>
+        </section>
+        <hr class="border-white/20 my-10">
+
+        <!-- FIDELIZACION -->
+        <section class="space-y-4 mb-12">
+            <h2 class="text-white text-2xl font-semibold mb-4">Reportes</h2>
+
+            <h2 class="text-white text-2xl font-semibold">¿Es viable un club de clientes?</h2>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <h3 class="font-semibold mb-2">Pedidos por cliente</h3>
+                <table class="w-full text-sm" id="tablaClientes"></table>
+            </div>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <h3 class="font-semibold mb-2">Top clientes</h3>
+                <canvas id="clientesChart"></canvas>
+            </div>
+        </section>
+
+        <!-- PROMOCIONES -->
+        <section class="space-y-4 mb-12">
+            <h2 class="text-white text-2xl font-semibold">¿Dónde enfocar promociones?</h2>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <h3 class="font-semibold mb-2">Productos más vendidos</h3>
+                <canvas id="productosChart"></canvas>
+            </div>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <h3 class="font-semibold mb-2">Ventas por día de la semana</h3>
+                <canvas id="diasChart"></canvas>
+            </div>
+        </section>
+
+        <!-- NEGOCIO -->
+        <section class="space-y-4 mb-12">
+            <h2 class="text-white text-2xl font-semibold">¿Cómo va el negocio?</h2>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <h3 class="font-semibold mb-2">Ventas por día</h3>
+                <canvas id="ventasChart"></canvas>
+            </div>
+        </section>
+
+        <!-- ESTADO -->
+        <section class="space-y-4 mb-12">
+            <h2 class="text-white text-2xl font-semibold">Estado de pedidos</h2>
+
+            <div class="bg-white/80 backdrop-blur p-4 rounded-2xl shadow">
+                <table class="w-full text-sm" id="tablaEstados"></table>
+            </div>
+        </section>
+        <hr class="border-white/20 my-10">
+
+        <!-- Queries -->
+        <section>
+            <h2 class="text-white text-2xl font-semibold mb-4">Consultas MongoDB</h2>
+
+            <div class="space-y-4 mb-12">
+
+                <pre class="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-sm"><code>// Pedidos por cliente
+db.pedidos.aggregate([
+  { $group: { _id: "$cliente.nombre", cantidadPedidos: { $sum: 1 }, totalGastado: { $sum: "$total" } } },
+  { $sort: { cantidadPedidos: -1 } }
+])</code></pre>
+
+                <pre class="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-sm"><code>// Top clientes
+db.pedidos.aggregate([
+  { $group: { _id: "$cliente.nombre", cantidadPedidos: { $sum: 1 }, totalGastado: { $sum: "$total" } } },
+  { $sort: { cantidadPedidos: -1, totalGastado: -1 } },
+  { $limit: 5 }
+])</code></pre>
+
+                <pre class="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-sm"><code>// Productos más vendidos
+db.pedidos.aggregate([
+  { $unwind: "$productos" },
+  { $group: { _id: "$productos.nombre", cantidadVendida: { $sum: "$productos.cantidad" } } },
+  { $sort: { cantidadVendida: -1 } }
+])</code></pre>
+
+                <pre class="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-sm"><code>// Ventas por día
+db.pedidos.aggregate([
+  { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$fecha" } }, totalVentas: { $sum: "$total" }, cantidadPedidos: { $sum: 1 } } },
+  { $sort: { _id: 1 } }
+])</code></pre>
+
+                <pre class="bg-slate-900 text-green-400 p-4 rounded-xl overflow-auto text-sm"><code>// Pedidos por estado
+db.pedidos.aggregate([
+  { $group: { _id: "$estado", cantidad: { $sum: 1 } } },
+  { $sort: { cantidad: -1 } }
+])</code></pre>
+
+            </div>
+        </section>
+
+    </div>
+
+    <script src="/js/app.js"></script>
+
+</body>
+</html>
